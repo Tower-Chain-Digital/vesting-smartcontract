@@ -19,15 +19,18 @@ contract TTVesting is Ownable, ReentrancyGuard {
     uint256 public totalTokens;
     uint256 public claimedInstallments;
 
+    bool public tokensDeposited = false;
     bool public vestingInitialized = false;
 
     event TokensDeposited(address indexed depositor, uint256 amount);
     event TokensClaimed(address indexed owner, uint256 amount);
-    event VestingInitialized(uint256 firstInstallmentTimestamp, uint256 tokensPerInstallment);
+    event VestingInitialized(
+        uint256 firstInstallmentTimestamp,
+        uint256 tokensPerInstallment
+    );
     event EmergencyWithdraw(address indexed owner, uint256 amount);
 
-
-    constructor(IERC20 _token){
+    constructor(IERC20 _token) {
         token = _token;
     }
 
@@ -35,12 +38,19 @@ contract TTVesting is Ownable, ReentrancyGuard {
      * @dev Deposit tokens into the contract. The total deposit must match the limit.
      */
     function depositTokens(uint256 amount) external nonReentrant {
+        require(!tokensDeposited, "Tokens already deposited");
         require(!vestingInitialized, "Vesting has already been initialized");
-        require(amount == DEPOSIT_LIMIT, "Deposit must match the required amount");
-        require(amount % TOTAL_INSTALLMENTS == 0, "Deposit must be divisible by the number of installments");
-
+        require(
+            amount == DEPOSIT_LIMIT,
+            "Deposit must match the required amount"
+        );
+        require(
+            amount % TOTAL_INSTALLMENTS == 0,
+            "Deposit must be divisible by the number of installments"
+        );
 
         totalTokens = amount;
+        tokensDeposited = true;
         tokensPerInstallment = totalTokens / TOTAL_INSTALLMENTS;
 
         token.safeTransferFrom(msg.sender, address(this), amount);
@@ -55,7 +65,10 @@ contract TTVesting is Ownable, ReentrancyGuard {
         require(!vestingInitialized, "Vesting has already been initialized");
         vestingInitialized = true;
 
-        emit VestingInitialized(FIRST_INSTALLMENT_TIMESTAMP, tokensPerInstallment);
+        emit VestingInitialized(
+            FIRST_INSTALLMENT_TIMESTAMP,
+            tokensPerInstallment
+        );
     }
 
     /**
@@ -64,18 +77,23 @@ contract TTVesting is Ownable, ReentrancyGuard {
     function claimTokens() external onlyOwner nonReentrant {
         require(vestingInitialized, "Vesting has not been initialized");
 
-        require(block.timestamp >= FIRST_INSTALLMENT_TIMESTAMP, "Vesting has not started");
+        require(
+            block.timestamp >= FIRST_INSTALLMENT_TIMESTAMP,
+            "Vesting has not started"
+        );
 
         uint256 availableInstallments = getAvailableInstallments();
-        require(availableInstallments > claimedInstallments, "No tokens available to claim");
+        require(
+            availableInstallments > claimedInstallments,
+            "No tokens available to claim"
+        );
 
-        uint256 installmentsToClaim = availableInstallments - claimedInstallments;
+        uint256 installmentsToClaim = availableInstallments -
+            claimedInstallments;
         uint256 tokensToClaim = installmentsToClaim * tokensPerInstallment;
 
         claimedInstallments = availableInstallments;
-
         token.safeTransfer(owner(), tokensToClaim);
-
         emit TokensClaimed(owner(), tokensToClaim);
     }
 
@@ -84,13 +102,21 @@ contract TTVesting is Ownable, ReentrancyGuard {
      * This checks how many months have passed since the first installment timestamp.
      */
     function getAvailableInstallments() public view returns (uint256) {
-        if (!vestingInitialized || block.timestamp < FIRST_INSTALLMENT_TIMESTAMP) {
+        if (
+            !vestingInitialized || block.timestamp < FIRST_INSTALLMENT_TIMESTAMP
+        ) {
             return 0;
         }
 
         // Calculate the number of months that have passed since the start timestamp
-        uint256 monthsElapsed = _getMonthsElapsed(FIRST_INSTALLMENT_TIMESTAMP, block.timestamp);
-        return monthsElapsed > TOTAL_INSTALLMENTS ? TOTAL_INSTALLMENTS : monthsElapsed;
+        uint256 monthsElapsed = _getMonthsElapsed(
+            FIRST_INSTALLMENT_TIMESTAMP,
+            block.timestamp
+        );
+        return
+            monthsElapsed > TOTAL_INSTALLMENTS
+                ? TOTAL_INSTALLMENTS
+                : monthsElapsed;
     }
 
     /**
@@ -98,7 +124,8 @@ contract TTVesting is Ownable, ReentrancyGuard {
      */
     function getReleasableAmount() public view returns (uint256) {
         uint256 availableInstallments = getAvailableInstallments();
-        uint256 installmentsToClaim = availableInstallments - claimedInstallments;
+        uint256 installmentsToClaim = availableInstallments -
+            claimedInstallments;
         return installmentsToClaim * tokensPerInstallment;
     }
 
@@ -106,33 +133,18 @@ contract TTVesting is Ownable, ReentrancyGuard {
      * @dev Utility function to calculate elapsed months between two timestamps.
      * Ensures precise month-based calculations (1st of every month).
      */
-    function _getMonthsElapsed(uint256 start, uint256 current) internal pure returns (uint256) {
+    function _getMonthsElapsed(
+        uint256 start,
+        uint256 current
+    ) internal pure returns (uint256) {
         require(current >= start, "Current time must be after start time");
-
-        uint256 startYear = _getYear(start);
-        uint256 startMonth = _getMonth(start);
-
-        uint256 currentYear = _getYear(current);
-        uint256 currentMonth = _getMonth(current);
-
-        return (currentYear - startYear) * 12 + (currentMonth - startMonth) + 1; // +1 because we count the starting month
+        uint256 diff = current - start;
+        uint256 months = (diff / (30 days)) + 1;
+        if (months > TOTAL_INSTALLMENTS) {
+            months = TOTAL_INSTALLMENTS;
+        }
+        return months;
     }
-
-    /**
-     * @dev Extract the year from a timestamp.
-     */
-    function _getYear(uint256 timestamp) internal pure returns (uint256) {
-        return 1970 + timestamp / 365 days;
-    }
-
-    /**
-     * @dev Extract the month from a timestamp.
-     */
-    function _getMonth(uint256 timestamp) internal pure returns (uint256) {
-        return (timestamp % 365 days) / 30 days;
-    }
-
-
 
     /**
      * @dev Ensure Ether cannot be sent to this contract.
