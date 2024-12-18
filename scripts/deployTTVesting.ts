@@ -6,14 +6,10 @@ async function main() {
   console.log("Deploying contract with the account:", deployer.address);
 
   // Contract Deployment Parameters
-  const TOKEN_ADDRESS = "0x1dd3346BB9195Fa677ceF41f9727cb515214f61f"; // Replace with the actual token address
+  const TOKEN_ADDRESS = "0x69D349E2009Af35206EFc3937BaD6817424729F7"; // Replace with the actual token address
 
   console.log("Token Address:", TOKEN_ADDRESS);
-
-  // Fetch the Contract Factory
   const TTVesting = await ethers.getContractFactory("TTVesting");
-
-  // Deploy the Contract
   const ttVesting = await TTVesting.deploy(TOKEN_ADDRESS);
 
   await ttVesting.waitForDeployment();

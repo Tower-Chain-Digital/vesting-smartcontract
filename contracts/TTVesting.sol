@@ -49,6 +49,9 @@ contract TTVesting is Ownable, ReentrancyGuard {
             "Deposit must be divisible by the number of installments"
         );
 
+        uint256 allowance = token.allowance(msg.sender, address(this));
+        require(allowance >= amount, "Insufficient token allowance");
+
         totalTokens = amount;
         tokensDeposited = true;
         tokensPerInstallment = totalTokens / TOTAL_INSTALLMENTS;

@@ -8,7 +8,6 @@ describe("TTVesting", function () {
   const TOTAL_INSTALLMENTS = 12;
   const DEPOSIT_LIMIT = ethers.parseUnits("3480000", 18);
   const FIRST_INSTALLMENT_TIMESTAMP = 1735722000; // 1st Jan 2025, 09:00 GMT
-
   async function deployContractFixture() {
     // Get signers
     const [owner, depositor, anotherUser] = await ethers.getSigners();
@@ -21,6 +20,7 @@ describe("TTVesting", function () {
     const TTVestingFactory = await ethers.getContractFactory("TTVesting");
     const ttVesting = await TTVestingFactory.deploy(await mockToken.getAddress()) as TTVesting;
 
+
     // Mint tokens to depositor
     await mockToken.connect(owner).mint(depositor.address, DEPOSIT_LIMIT);
 
@@ -28,6 +28,7 @@ describe("TTVesting", function () {
     await mockToken.connect(depositor).approve(await ttVesting.getAddress(), DEPOSIT_LIMIT);
 
     return { ttVesting, mockToken, owner, depositor, anotherUser };
+
   }
 
   async function deployAndInitializeFixture() {
@@ -50,6 +51,23 @@ describe("TTVesting", function () {
   });
 
   describe("Token Deposit", function () {
+    it("Should revert if deposit is made with a different token address", async function () {
+      const { ttVesting, depositor } = await loadFixture(deployContractFixture);
+      
+      // Deploy another mock token
+      const MockTokenFactory = await ethers.getContractFactory("MockERC20");
+      const wrongToken = await MockTokenFactory.deploy("Wrong Token", "WRONG", DEPOSIT_LIMIT * 2n);
+
+      // Mint tokens to depositor
+      await wrongToken.connect(depositor).mint(depositor.address, DEPOSIT_LIMIT);
+
+      // Approve wrong token for deposit
+      await wrongToken.connect(depositor).approve(ttVesting.target, DEPOSIT_LIMIT);
+
+      // Try to deposit with wrong token
+      await expect(ttVesting.connect(depositor).depositTokens(DEPOSIT_LIMIT))
+        .to.be.revertedWith("Token address does not match the required deposit token");
+    });
     it("Should allow depositing the exact deposit limit", async function () {
       const { ttVesting, mockToken, depositor } = await loadFixture(deployContractFixture);
       
